@@ -108,12 +108,27 @@ Si vous voulez configurer le DNS avant le déploiement :
 
 2. **Configurez vos enregistrements DNS** :
 
-   - `no-skills.fr` → `VOTRE_IP_SERVEUR`
-   - `www.no-skills.fr` → `VOTRE_IP_SERVEUR`
+   **Pour IPv4** (ex: 192.168.1.100) :
+
+   - Enregistrement A : `no-skills.fr` → `VOTRE_IP_SERVEUR`
+   - Enregistrement A : `www.no-skills.fr` → `VOTRE_IP_SERVEUR`
+
+   **Pour IPv6** (ex: 2001:41d0:304:200::6688) :
+
+   - Enregistrement AAAA : `no-skills.fr` → `VOTRE_IP_SERVEUR`
+   - Enregistrement AAAA : `www.no-skills.fr` → `VOTRE_IP_SERVEUR`
 
 3. **Vérifiez la propagation** :
+
    ```bash
-   dig no-skills.fr @8.8.8.8
+   # Pour IPv4
+   dig A no-skills.fr @8.8.8.8
+
+   # Pour IPv6
+   dig AAAA no-skills.fr @8.8.8.8
+
+   # Alternative avec nslookup
+   nslookup no-skills.fr 8.8.8.8
    ```
 
 > **Note** : Le script peut déployer sans DNS configuré et générer le SSL plus tard !

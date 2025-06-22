@@ -69,8 +69,14 @@ check_dns() {
 
     log "IP publique du serveur: $SERVER_IP"
 
-    # Vérifier la résolution DNS
-    DOMAIN_IP=$(dig +short $DOMAIN @8.8.8.8 | tail -n1)
+    # Vérifier la résolution DNS (IPv4 et IPv6)
+    if [[ "$SERVER_IP" =~ : ]]; then
+        # IPv6 - utiliser AAAA record
+        DOMAIN_IP=$(dig +short AAAA $DOMAIN @8.8.8.8 | tail -n1)
+    else
+        # IPv4 - utiliser A record
+        DOMAIN_IP=$(dig +short A $DOMAIN @8.8.8.8 | tail -n1)
+    fi
 
     if [[ "$DOMAIN_IP" == "$SERVER_IP" ]]; then
         log "✅ DNS correctement configuré: $DOMAIN → $SERVER_IP"
@@ -86,8 +92,18 @@ check_dns() {
         echo ""
         echo "📝 Pour configurer le DNS:"
         echo "   - Connectez-vous à votre registrar de domaine"
-        echo "   - Créez un enregistrement A: $DOMAIN → $SERVER_IP"
-        echo "   - Créez un enregistrement A: www.$DOMAIN → $SERVER_IP"
+
+        # Déterminer le type d'enregistrement selon l'IP
+        if [[ "$SERVER_IP" =~ : ]]; then
+            # IPv6
+            echo "   - Créez un enregistrement AAAA: $DOMAIN → $SERVER_IP"
+            echo "   - Créez un enregistrement AAAA: www.$DOMAIN → $SERVER_IP"
+        else
+            # IPv4
+            echo "   - Créez un enregistrement A: $DOMAIN → $SERVER_IP"
+            echo "   - Créez un enregistrement A: www.$DOMAIN → $SERVER_IP"
+        fi
+
         echo "   - Attendez la propagation DNS (jusqu'à 24h)"
         echo ""
         read -p "Appuyez sur Entrée quand le DNS est configuré, ou Ctrl+C pour annuler..."
@@ -222,7 +238,7 @@ install_docker_compose() {
         return
     fi
 
-    # Tél��charger Docker Compose
+    # Télécharger Docker Compose
     curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 
     # Rendre exécutable
@@ -679,7 +695,7 @@ WORKDIR /app
 
 # Copier les fichiers de dépendances
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --only=production
 
 # Copier le code source
 COPY . .
@@ -820,7 +836,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installer les dépendances
-RUN npm ci --only=production
+RUN npm install --only=production
 
 # Copier le code source
 COPY . .

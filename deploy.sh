@@ -49,12 +49,12 @@ check_root() {
 # Vérifier la distribution Linux
 check_distribution() {
     log "Vérification de la distribution Linux..."
-    
+
     if [[ -f /etc/os-release ]]; then
         . /etc/os-release
         OS=$NAME
         VER=$VERSION_ID
-        
+
         case $ID in
             ubuntu)
                 if [[ $VER < "20.04" ]]; then
@@ -78,7 +78,7 @@ check_distribution() {
                 PACKAGE_MANAGER="apt"
                 ;;
         esac
-        
+
         log "Distribution détectée: $OS $VER"
     else
         error "Impossible de détecter la distribution"
@@ -89,7 +89,7 @@ check_distribution() {
 # Mise à jour du système
 update_system() {
     log "Mise à jour du système..."
-    
+
     case $PACKAGE_MANAGER in
         apt)
             apt update && apt upgrade -y
@@ -105,27 +105,27 @@ update_system() {
 # Installation de Docker
 install_docker() {
     log "Installation de Docker..."
-    
+
     if command -v docker &> /dev/null; then
         log "Docker est déjà installé"
         return
     fi
-    
+
     case $PACKAGE_MANAGER in
         apt)
             # Supprimer les anciennes versions
             apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
-            
+
             # Installer les dépendances
             apt install -y ca-certificates curl gnupg lsb-release
-            
+
             # Ajouter la clé GPG officielle de Docker
             mkdir -p /etc/apt/keyrings
             curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-            
+
             # Ajouter le repository
             echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
-            
+
             # Installer Docker
             apt update
             apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
@@ -137,42 +137,42 @@ install_docker() {
             systemctl enable docker
             ;;
     esac
-    
+
     # Démarrer Docker
     systemctl start docker
     systemctl enable docker
-    
+
     # Ajouter l'utilisateur actuel au groupe docker
     usermod -aG docker $SUDO_USER 2>/dev/null || true
-    
+
     log "Docker installé avec succès"
 }
 
 # Installation de Docker Compose (version standalone)
 install_docker_compose() {
     log "Installation de Docker Compose..."
-    
+
     if command -v docker-compose &> /dev/null; then
         log "Docker Compose est déjà installé"
         return
     fi
-    
+
     # Télécharger Docker Compose
     curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    
+
     # Rendre exécutable
     chmod +x /usr/local/bin/docker-compose
-    
+
     # Créer un lien symbolique
     ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
-    
+
     log "Docker Compose installé avec succès"
 }
 
 # Installation de Nginx
 install_nginx() {
     log "Installation de Nginx..."
-    
+
     case $PACKAGE_MANAGER in
         apt)
             apt install -y nginx
@@ -181,17 +181,17 @@ install_nginx() {
             yum install -y nginx
             ;;
     esac
-    
+
     systemctl start nginx
     systemctl enable nginx
-    
+
     log "Nginx installé avec succès"
 }
 
 # Installation de Certbot pour SSL
 install_certbot() {
     log "Installation de Certbot pour SSL..."
-    
+
     case $PACKAGE_MANAGER in
         apt)
             apt install -y certbot python3-certbot-nginx
@@ -200,26 +200,26 @@ install_certbot() {
             yum install -y certbot python3-certbot-nginx
             ;;
     esac
-    
+
     log "Certbot installé avec succès"
 }
 
 # Configuration du firewall
 configure_firewall() {
     log "Configuration du firewall..."
-    
+
     case $PACKAGE_MANAGER in
         apt)
             # UFW pour Ubuntu/Debian
             ufw --force reset
             ufw default deny incoming
             ufw default allow outgoing
-            
+
             # Ports nécessaires
             ufw allow ssh
             ufw allow 80/tcp
             ufw allow 443/tcp
-            
+
             # Activer UFW
             ufw --force enable
             ;;
@@ -227,21 +227,21 @@ configure_firewall() {
             # FirewallD pour CentOS/RHEL
             systemctl start firewalld
             systemctl enable firewalld
-            
+
             firewall-cmd --permanent --add-service=ssh
             firewall-cmd --permanent --add-service=http
             firewall-cmd --permanent --add-service=https
             firewall-cmd --reload
             ;;
     esac
-    
+
     log "Firewall configuré avec succès"
 }
 
 # Création de la structure des dossiers
 create_directories() {
     log "Création de la structure des dossiers..."
-    
+
     mkdir -p $APP_DIR
     mkdir -p $APP_DIR/frontend
     mkdir -p $APP_DIR/backend
@@ -249,14 +249,14 @@ create_directories() {
     mkdir -p $APP_DIR/nginx
     mkdir -p $APP_DIR/ssl
     mkdir -p /var/log/no-skills
-    
+
     log "Dossiers créés avec succès"
 }
 
 # Création du fichier Docker Compose
 create_docker_compose() {
     log "Création du fichier docker-compose.yml..."
-    
+
     cat > $APP_DIR/docker-compose.yml << 'EOF'
 version: '3.8'
 
@@ -354,12 +354,12 @@ EOF
 # Création du fichier d'environnement
 create_env_file() {
     log "Création du fichier d'environnement..."
-    
+
     # Générer des mots de passe sécurisés
     DB_PASSWORD=$(openssl rand -base64 32)
     JWT_SECRET=$(openssl rand -base64 64)
     REDIS_PASSWORD=$(openssl rand -base64 32)
-    
+
     cat > $APP_DIR/.env << EOF
 # Configuration No-Skills
 DOMAIN=$DOMAIN
@@ -382,48 +382,22 @@ EOF
     log "Fichier .env créé avec mots de passe sécurisés"
 }
 
-# Configuration de Nginx
-configure_nginx() {
-    log "Configuration de Nginx..."
-    
+# Configuration de Nginx (sans SSL d'abord)
+configure_nginx_http() {
+    log "Configuration initiale de Nginx (HTTP seulement)..."
+
     cat > $NGINX_CONFIG << EOF
 server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
-    
-    # Redirection vers HTTPS
-    return 301 https://\$server_name\$request_uri;
-}
 
-server {
-    listen 443 ssl http2;
-    server_name $DOMAIN www.$DOMAIN;
-    
-    # Certificats SSL (seront générés par Certbot)
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    
-    # Configuration SSL moderne
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-    
-    # En-têtes de sécurité
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    
     # Logs
     access_log /var/log/nginx/no-skills.access.log;
     error_log /var/log/nginx/no-skills.error.log;
-    
+
     # Taille maximale des uploads
     client_max_body_size 50M;
-    
+
     # Frontend (React)
     location / {
         proxy_pass http://localhost:3000;
@@ -435,11 +409,11 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
-        
+
         # Gestion des fichiers statiques
         try_files \$uri \$uri/ @fallback;
     }
-    
+
     # API Backend
     location /api/ {
         proxy_pass http://localhost:3001/;
@@ -451,13 +425,13 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
-        
+
         # Timeout pour les longs traitements
         proxy_read_timeout 300;
         proxy_connect_timeout 300;
         proxy_send_timeout 300;
     }
-    
+
     # WebSocket pour le temps réel
     location /socket.io/ {
         proxy_pass http://localhost:3001/socket.io/;
@@ -467,16 +441,16 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_Set_header X-Forwarded-Proto \$scheme;
     }
-    
+
     # Gestion des fichiers uploadés
     location /uploads/ {
         proxy_pass http://localhost:3001/uploads/;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
-    
+
     # Fallback pour React Router
     location @fallback {
         proxy_pass http://localhost:3000;
@@ -491,25 +465,147 @@ EOF
 
     # Activer le site
     ln -sf $NGINX_CONFIG /etc/nginx/sites-enabled/
-    
+
     # Supprimer le site par défaut
     rm -f /etc/nginx/sites-enabled/default
-    
+
     # Tester la configuration
     nginx -t
-    
+
+    # Recharger Nginx
+    systemctl reload nginx
+
+    log "Configuration Nginx HTTP créée et activée"
+}
+
+# Configuration de Nginx avec SSL (après génération des certificats)
+configure_nginx_ssl() {
+    log "Configuration de Nginx avec SSL..."
+
+    cat > $NGINX_CONFIG << EOF
+server {
+    listen 80;
+    server_name $DOMAIN www.$DOMAIN;
+
+    # Redirection vers HTTPS
+    return 301 https://\$server_name\$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name $DOMAIN www.$DOMAIN;
+
+    # Certificats SSL
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+    # Configuration SSL moderne
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # En-têtes de sécurité
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Logs
+    access_log /var/log/nginx/no-skills.access.log;
+    error_log /var/log/nginx/no-skills.error.log;
+
+    # Taille maximale des uploads
+    client_max_body_size 50M;
+
+    # Frontend (React)
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+
+        # Gestion des fichiers statiques
+        try_files \$uri \$uri/ @fallback;
+    }
+
+    # API Backend
+    location /api/ {
+        proxy_pass http://localhost:3001/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+
+        # Timeout pour les longs traitements
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # WebSocket pour le temps réel
+    location /socket.io/ {
+        proxy_pass http://localhost:3001/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Gestion des fichiers uploadés
+    location /uploads/ {
+        proxy_pass http://localhost:3001/uploads/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Fallback pour React Router
+    location @fallback {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+    # Activer le site
+    ln -sf $NGINX_CONFIG /etc/nginx/sites-enabled/
+
+    # Supprimer le site par défaut
+    rm -f /etc/nginx/sites-enabled/default
+
+    # Tester la configuration
+    nginx -t
+
     log "Configuration Nginx créée"
 }
 
 # Déploiement du code
 deploy_code() {
     log "Déploiement du code de l'application..."
-    
+
     # Copier le frontend (code React)
     if [ -d "./src" ]; then
         log "Copie du code frontend..."
         cp -r . $APP_DIR/frontend/
-        
+
         # Créer le Dockerfile pour le frontend
         cat > $APP_DIR/frontend/Dockerfile << 'EOF'
 FROM node:18-alpine as builder
@@ -566,10 +662,10 @@ server {
 }
 EOF
     fi
-    
+
     # Créer un backend de base (Node.js/Express)
     mkdir -p $APP_DIR/backend
-    
+
     cat > $APP_DIR/backend/package.json << 'EOF'
 {
   "name": "no-skills-backend",
@@ -638,7 +734,7 @@ app.get('/api/test', (req, res) => {
 // Gestion des WebSockets
 io.on('connection', (socket) => {
   console.log('Utilisateur connecté:', socket.id);
-  
+
   socket.on('disconnect', () => {
     console.log('Utilisateur déconnecté:', socket.id);
   });
@@ -720,7 +816,7 @@ CREATE TABLE messages (
 );
 
 -- Créer l'utilisateur owner par défaut
-INSERT INTO users (pseudo, email, password_hash, age, role) VALUES 
+INSERT INTO users (pseudo, email, password_hash, age, role) VALUES
 ('Yupi', 'yupi@no-skills.fr', '$2a$10$YourHashedPasswordHere', 25, 'owner');
 
 -- Index pour les performances
@@ -736,44 +832,59 @@ EOF
 # Génération du certificat SSL
 generate_ssl() {
     log "Génération du certificat SSL..."
-    
-    # Arrêter nginx temporairement
-    systemctl stop nginx
-    
-    # Générer le certificat
-    certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive
-    
-    # Redémarrer nginx
-    systemctl start nginx
-    
+
+    # Utiliser le plugin nginx pour générer le certificat
+    certbot --nginx -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive --redirect
+
+    # Si certbot avec nginx échoue, essayer la méthode standalone
+    if [ $? -ne 0 ]; then
+        warning "Échec avec le plugin nginx, essai avec standalone..."
+
+        # Arrêter nginx temporairement
+        systemctl stop nginx
+
+        # Générer le certificat en standalone
+        certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive
+
+        # Si réussi, reconfigurer nginx avec SSL
+        if [ $? -eq 0 ]; then
+            configure_nginx_ssl
+            systemctl start nginx
+        else
+            error "Échec de la génération du certificat SSL"
+            systemctl start nginx
+            return 1
+        fi
+    fi
+
     # Programmer le renouvellement automatique
     (crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet") | crontab -
-    
+
     log "Certificat SSL généré et renouvellement programmé"
 }
 
 # Démarrage des services
 start_services() {
     log "Démarrage des services..."
-    
+
     cd $APP_DIR
-    
+
     # Construire et démarrer les conteneurs
     docker-compose up -d --build
-    
+
     # Attendre que les services démarrent
     sleep 30
-    
+
     # Vérifier le statut
     docker-compose ps
-    
+
     log "Services démarrés avec succès"
 }
 
 # Configuration des logs et monitoring
 setup_monitoring() {
     log "Configuration du monitoring..."
-    
+
     # Logrotate pour les logs nginx
     cat > /etc/logrotate.d/no-skills << 'EOF'
 /var/log/nginx/no-skills*.log {
@@ -810,14 +921,14 @@ echo "=== Derniers logs nginx ==="
 tail -n 10 /var/log/nginx/no-skills.error.log
 EOF
     chmod +x /usr/local/bin/no-skills-status
-    
+
     log "Monitoring configuré"
 }
 
 # Fonction principale
 main() {
     log "🚀 Début du déploiement de No-Skills"
-    
+
     check_root
     check_distribution
     update_system
@@ -829,18 +940,24 @@ main() {
     create_directories
     create_docker_compose
     create_env_file
-    configure_nginx
+    configure_nginx_http
     deploy_code
-    
+
     warning "⚠️  IMPORTANT: Configurez votre DNS pour pointer $DOMAIN vers cette IP avant de continuer"
     read -p "Appuyez sur Entrée quand le DNS est configuré..."
-    
-    generate_ssl
+
     start_services
+
+    # Attendre que les services soient opérationnels
+    log "Attente du démarrage des services..."
+    sleep 30
+
+    # Générer le SSL maintenant que tout est en place
+    generate_ssl
     setup_monitoring
-    
+
     log "✅ Déploiement terminé avec succès!"
-    
+
     echo ""
     echo "========================================="
     echo "🎉 NO-SKILLS DÉPLOYÉ AVEC SUCCÈS!"

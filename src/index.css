@@ -1,0 +1,280 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /**
+   * Système de couleurs pour No-Skills Messagerie
+   * Variables CSS exprimées en HSL pour compatibilité Tailwind
+   */
+  :root {
+    /* Couleurs de base - thème clair */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    /* Interface principale */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Couleurs primaires - bleu moderne */
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Couleurs secondaires */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    /* Couleurs d'accent et statut */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Bordures et champs */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar spécifique messagerie */
+    --sidebar-background: 240 6% 10%;
+    --sidebar-foreground: 240 5% 84%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 4% 16%;
+    --sidebar-accent-foreground: 240 5% 84%;
+    --sidebar-border: 240 4% 16%;
+    --sidebar-ring: 221 83% 53%;
+
+    /* Couleurs spécifiques messagerie */
+    --chat-background: 0 0% 100%;
+    --chat-message-own: 221 83% 53%;
+    --chat-message-other: 210 40% 96.1%;
+    --chat-input: 0 0% 100%;
+
+    /* Badges de rôles */
+    --role-owner: 45 93% 47%;
+    --role-admin: 0 84% 60%;
+    --role-moderator: 221 83% 53%;
+    --role-user: 210 40% 80%;
+
+    /* Statut en ligne */
+    --status-online: 142 71% 45%;
+    --status-away: 45 93% 47%;
+    --status-busy: 0 84% 60%;
+    --status-offline: 215.4 16.3% 46.9%;
+  }
+
+  .dark {
+    /* Couleurs de base - thème sombre */
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
+
+    /* Couleurs primaires sombres */
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 213 31% 91%;
+
+    --muted: 215 28% 17%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+
+    --accent: 215 28% 17%;
+    --accent-foreground: 213 31% 91%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 213 31% 91%;
+
+    --border: 215 28% 17%;
+    --input: 215 28% 17%;
+    --ring: 221 83% 53%;
+
+    --sidebar-background: 222 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 28% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 215 28% 17%;
+    --sidebar-ring: 221 83% 53%;
+
+    /* Couleurs spécifiques messagerie sombre */
+    --chat-background: 224 71% 4%;
+    --chat-message-own: 221 83% 53%;
+    --chat-message-other: 215 28% 17%;
+    --chat-input: 215 28% 17%;
+  }
+
+  .military {
+    /* Thème militaire */
+    --background: 120 6% 15%;
+    --foreground: 120 3% 84%;
+
+    --card: 120 6% 15%;
+    --card-foreground: 120 3% 84%;
+
+    --popover: 120 6% 15%;
+    --popover-foreground: 120 3% 84%;
+
+    --primary: 120 100% 25%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 120 5% 25%;
+    --secondary-foreground: 120 3% 84%;
+
+    --muted: 120 5% 25%;
+    --muted-foreground: 120 2% 65%;
+
+    --accent: 120 5% 25%;
+    --accent-foreground: 120 3% 84%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 120 3% 84%;
+
+    --border: 120 5% 25%;
+    --input: 120 5% 25%;
+    --ring: 120 100% 25%;
+
+    --sidebar-background: 120 8% 10%;
+    --sidebar-foreground: 120 3% 84%;
+    --sidebar-primary: 120 100% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 120 5% 20%;
+    --sidebar-accent-foreground: 120 3% 84%;
+    --sidebar-border: 120 5% 20%;
+    --sidebar-ring: 120 100% 25%;
+
+    /* Couleurs spécifiques messagerie militaire */
+    --chat-background: 120 6% 15%;
+    --chat-message-own: 120 100% 25%;
+    --chat-message-other: 120 5% 25%;
+    --chat-input: 120 5% 25%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Classes utilitaires pour la messagerie */
+  .message-bubble {
+    @apply rounded-2xl px-4 py-2 max-w-xs break-words;
+  }
+
+  .message-own {
+    @apply bg-primary text-primary-foreground ml-auto;
+  }
+
+  .message-other {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  .role-badge {
+    @apply inline-flex items-center justify-center text-xs font-medium rounded-full w-5 h-5;
+  }
+
+  .status-indicator {
+    @apply w-3 h-3 rounded-full border-2 border-background;
+  }
+
+  .chat-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted));
+    border-radius: 3px;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground));
+  }
+}
+
+/* Animations personnalisées */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  20%,
+  53%,
+  80%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  40%,
+  43% {
+    transform: translate3d(0, -8px, 0);
+  }
+  70% {
+    transform: translate3d(0, -4px, 0);
+  }
+  90% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-bounce-gentle {
+  animation: bounce 1s ease-in-out;
+}

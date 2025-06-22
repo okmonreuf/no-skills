@@ -16,10 +16,14 @@ NC='\033[0m' # No Color
 
 # Configuration
 DOMAIN="no-skills.fr"
-EMAIL="contact@no-skills.fr"
+EMAIL="admin@no-skills.fr"
 APP_DIR="/var/www/no-skills"
 NGINX_CONFIG="/etc/nginx/sites-available/no-skills"
 DOCKER_COMPOSE_VERSION="v2.20.0"
+
+# Configuration automatique
+AUTO_DEPLOY=${AUTO_DEPLOY:-false}
+SKIP_DNS_CHECK=${SKIP_DNS_CHECK:-false}
 
 # Fonction de logging
 log() {
@@ -43,6 +47,53 @@ check_root() {
     if [[ $EUID -ne 0 ]]; then
         error "Ce script doit être exécuté en tant que root (sudo ./deploy.sh)"
         exit 1
+    fi
+}
+
+# Vérifier la configuration DNS
+check_dns() {
+    if [[ "$SKIP_DNS_CHECK" == "true" ]]; then
+        log "Vérification DNS ignorée (SKIP_DNS_CHECK=true)"
+        return 0
+    fi
+
+    log "Vérification de la configuration DNS..."
+
+    # Obtenir l'IP publique du serveur
+    SERVER_IP=$(curl -s ifconfig.me || curl -s ipinfo.io/ip || curl -s icanhazip.com)
+
+    if [[ -z "$SERVER_IP" ]]; then
+        warning "Impossible de détecter l'IP publique du serveur"
+        return 1
+    fi
+
+    log "IP publique du serveur: $SERVER_IP"
+
+    # Vérifier la résolution DNS
+    DOMAIN_IP=$(dig +short $DOMAIN @8.8.8.8 | tail -n1)
+
+    if [[ "$DOMAIN_IP" == "$SERVER_IP" ]]; then
+        log "✅ DNS correctement configuré: $DOMAIN → $SERVER_IP"
+        return 0
+    else
+        warning "⚠️  DNS non configuré: $DOMAIN → $DOMAIN_IP (attendu: $SERVER_IP)"
+
+        if [[ "$AUTO_DEPLOY" == "true" ]]; then
+            error "Déploiement automatique impossible: DNS non configuré"
+            exit 1
+        fi
+
+        echo ""
+        echo "📝 Pour configurer le DNS:"
+        echo "   - Connectez-vous à votre registrar de domaine"
+        echo "   - Créez un enregistrement A: $DOMAIN → $SERVER_IP"
+        echo "   - Créez un enregistrement A: www.$DOMAIN → $SERVER_IP"
+        echo "   - Attendez la propagation DNS (jusqu'à 24h)"
+        echo ""
+        read -p "Appuyez sur Entrée quand le DNS est configuré, ou Ctrl+C pour annuler..."
+
+        # Revérifier après action utilisateur
+        check_dns
     fi
 }
 
@@ -108,6 +159,12 @@ install_docker() {
 
     if command -v docker &> /dev/null; then
         log "Docker est déjà installé"
+        # Vérifier que Docker fonctionne
+        if ! docker info &> /dev/null; then
+            log "Redémarrage du service Docker..."
+            systemctl start docker
+            systemctl enable docker
+        fi
         return
     fi
 
@@ -152,12 +209,20 @@ install_docker() {
 install_docker_compose() {
     log "Installation de Docker Compose..."
 
+    # Vérifier les deux versions possibles
     if command -v docker-compose &> /dev/null; then
-        log "Docker Compose est déjà installé"
+        log "Docker Compose (standalone) est déjà installé"
         return
     fi
 
-    # Télécharger Docker Compose
+    if docker compose version &> /dev/null; then
+        log "Docker Compose (plugin) est déjà installé"
+        # Créer un alias pour compatibilité
+        ln -sf /usr/bin/docker /usr/local/bin/docker-compose
+        return
+    fi
+
+    # Tél��charger Docker Compose
     curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 
     # Rendre exécutable
@@ -833,34 +898,56 @@ EOF
 generate_ssl() {
     log "Génération du certificat SSL..."
 
-    # Utiliser le plugin nginx pour générer le certificat
-    certbot --nginx -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive --redirect
+    # Vérifier d'abord si le certificat existe déjà
+    if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+        log "Certificat SSL existant trouvé"
+        configure_nginx_ssl
+        systemctl reload nginx
+        return 0
+    fi
 
-    # Si certbot avec nginx échoue, essayer la méthode standalone
-    if [ $? -ne 0 ]; then
-        warning "Échec avec le plugin nginx, essai avec standalone..."
+    # S'assurer que nginx fonctionne pour le défi HTTP
+    systemctl reload nginx
 
-        # Arrêter nginx temporairement
-        systemctl stop nginx
+    # Tentative 1: Utiliser le plugin nginx
+    log "Tentative de génération SSL avec le plugin nginx..."
+    if certbot --nginx -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive --redirect; then
+        log "✅ Certificat SSL généré avec succès (méthode nginx)"
+    else
+        warning "Échec avec le plugin nginx, essai avec webroot..."
 
-        # Générer le certificat en standalone
-        certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive
+        # Tentative 2: Méthode webroot
+        mkdir -p /var/www/html/.well-known/acme-challenge
+        chown -R www-data:www-data /var/www/html
 
-        # Si réussi, reconfigurer nginx avec SSL
-        if [ $? -eq 0 ]; then
+        if certbot certonly --webroot -w /var/www/html -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive; then
+            log "✅ Certificat SSL généré avec succès (méthode webroot)"
             configure_nginx_ssl
-            systemctl start nginx
+            systemctl reload nginx
         else
-            error "Échec de la génération du certificat SSL"
-            systemctl start nginx
-            return 1
+            warning "Échec avec webroot, essai avec standalone..."
+
+            # Tentative 3: Méthode standalone
+            systemctl stop nginx
+
+            if certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --email $EMAIL --agree-tos --non-interactive; then
+                log "✅ Certificat SSL généré avec succès (méthode standalone)"
+                configure_nginx_ssl
+                systemctl start nginx
+            else
+                error "⚠️  Échec de la génération du certificat SSL avec toutes les méthodes"
+                warning "Le site restera en HTTP. Vous pourrez générer le SSL plus tard avec:"
+                warning "sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN"
+                systemctl start nginx
+                return 1
+            fi
         fi
     fi
 
     # Programmer le renouvellement automatique
-    (crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet") | crontab -
+    (crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet --nginx") | crontab -
 
-    log "Certificat SSL généré et renouvellement programmé"
+    log "✅ Certificat SSL configuré et renouvellement programmé"
 }
 
 # Démarrage des services
@@ -869,16 +956,54 @@ start_services() {
 
     cd $APP_DIR
 
+    # Arrêter les anciens conteneurs s'ils existent
+    docker-compose down 2>/dev/null || true
+
     # Construire et démarrer les conteneurs
+    log "Construction et démarrage des conteneurs..."
     docker-compose up -d --build
 
     # Attendre que les services démarrent
-    sleep 30
+    log "Attente du démarrage des services..."
 
-    # Vérifier le statut
+    # Vérification progressive des services
+    local max_attempts=60
+    local attempt=0
+
+    while [ $attempt -lt $max_attempts ]; do
+        attempt=$((attempt + 1))
+
+        # Vérifier si tous les conteneurs sont en cours d'exécution
+        if docker-compose ps | grep -q "Up"; then
+            log "Services en cours de démarrage... ($attempt/$max_attempts)"
+
+            # Test de connectivité
+            if curl -s http://localhost:3001/health > /dev/null 2>&1; then
+                log "✅ Backend accessible"
+                break
+            fi
+        fi
+
+        if [ $attempt -eq $max_attempts ]; then
+            error "Timeout: Les services n'ont pas démarré dans les temps"
+            docker-compose logs
+            exit 1
+        fi
+
+        sleep 2
+    done
+
+    # Vérifier le statut final
     docker-compose ps
 
-    log "Services démarrés avec succès"
+    # Afficher les logs en cas de problème
+    if ! docker-compose ps | grep -q "Up"; then
+        error "Certains services ne sont pas démarrés correctement"
+        docker-compose logs
+        exit 1
+    fi
+
+    log "✅ Services démarrés avec succès"
 }
 
 # Configuration des logs et monitoring
@@ -927,49 +1052,122 @@ EOF
 
 # Fonction principale
 main() {
-    log "🚀 Début du déploiement de No-Skills"
+    log "🚀 Début du déploiement automatique de No-Skills"
 
+    # Vérifications préliminaires
     check_root
     check_distribution
+
+    # Installation des dépendances système
+    log "📦 Installation des dépendances système..."
     update_system
     install_docker
     install_docker_compose
     install_nginx
     install_certbot
     configure_firewall
+
+    # Préparation de l'environnement
+    log "🏗️  Préparation de l'environnement..."
     create_directories
     create_docker_compose
     create_env_file
     configure_nginx_http
     deploy_code
 
-    warning "⚠️  IMPORTANT: Configurez votre DNS pour pointer $DOMAIN vers cette IP avant de continuer"
-    read -p "Appuyez sur Entrée quand le DNS est configuré..."
+    # Vérification DNS (avec possibilité de skip)
+    check_dns
 
+    # Démarrage des services
+    log "🚀 Démarrage des services Docker..."
     start_services
 
-    # Attendre que les services soient opérationnels
-    log "Attente du démarrage des services..."
-    sleep 30
+    # Configuration SSL (tentative automatique)
+    log "🔒 Configuration SSL..."
+    if generate_ssl; then
+        SSL_PROTOCOL="https"
+    else
+        SSL_PROTOCOL="http"
+        warning "Site accessible en HTTP seulement pour le moment"
+    fi
 
-    # Générer le SSL maintenant que tout est en place
-    generate_ssl
+    # Configuration du monitoring
     setup_monitoring
 
+    # Rapport final
     log "✅ Déploiement terminé avec succès!"
 
     echo ""
     echo "========================================="
     echo "🎉 NO-SKILLS DÉPLOYÉ AVEC SUCCÈS!"
     echo "========================================="
-    echo "🌐 URL: https://$DOMAIN"
+    echo "🌐 URL: $SSL_PROTOCOL://$DOMAIN"
     echo "📁 Dossier: $APP_DIR"
     echo "🔑 Fichier env: $APP_DIR/.env"
     echo "📊 Status: no-skills-status"
     echo "🔄 Restart: cd $APP_DIR && docker-compose restart"
     echo "📋 Logs: cd $APP_DIR && docker-compose logs -f"
+    echo ""
+    echo "🔧 Commandes utiles:"
+    echo "   • Vérifier les services: docker-compose ps"
+    echo "   • Voir les logs: docker-compose logs -f [service]"
+    echo "   • Redémarrer: docker-compose restart"
+    echo "   • Mettre à jour: git pull && docker-compose up -d --build"
+
+    if [[ "$SSL_PROTOCOL" == "http" ]]; then
+        echo ""
+        echo "⚠️  Pour activer HTTPS plus tard:"
+        echo "   sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN"
+    fi
+
     echo "========================================="
 }
+
+# Gestion des arguments en ligne de commande
+while getopts "has" opt; do
+    case $opt in
+        h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  -h          Afficher cette aide"
+            echo "  -a          Déploiement automatique (skip DNS check)"
+            echo "  -s          Skip DNS check (permet de continuer sans DNS configuré)"
+            echo ""
+            echo "Variables d'environnement:"
+            echo "  AUTO_DEPLOY=true     Déploiement automatique complet"
+            echo "  SKIP_DNS_CHECK=true  Ignorer la vérification DNS"
+            echo ""
+            echo "Exemples:"
+            echo "  sudo ./deploy.sh              # Déploiement interactif"
+            echo "  sudo ./deploy.sh -a           # Déploiement automatique"
+            echo "  sudo ./deploy.sh -s           # Skip DNS check"
+            echo "  sudo AUTO_DEPLOY=true ./deploy.sh"
+            exit 0
+            ;;
+        a)
+            AUTO_DEPLOY=true
+            SKIP_DNS_CHECK=true
+            ;;
+        s)
+            SKIP_DNS_CHECK=true
+            ;;
+        \?)
+            echo "Option invalide: -$OPTARG" >&2
+            echo "Utilisez -h pour l'aide"
+            exit 1
+            ;;
+    esac
+done
+
+# Afficher la configuration
+if [[ "$AUTO_DEPLOY" == "true" ]]; then
+    log "🤖 Mode de déploiement automatique activé"
+fi
+
+if [[ "$SKIP_DNS_CHECK" == "true" ]]; then
+    log "⏭️  Vérification DNS désactivée"
+fi
 
 # Exécution du script principal
 main "$@"

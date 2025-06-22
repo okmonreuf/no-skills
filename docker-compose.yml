@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  # Base de données PostgreSQL
+  database:
+    image: postgres:15-alpine
+    container_name: no-skills-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: no_skills
+      POSTGRES_USER: no_skills_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - no-skills-network
+    ports:
+      - "5432:5432"
+
+  # Backend API (Node.js/Express)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: no-skills-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: no_skills
+      DB_USER: no_skills_user
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: https://no-skills.fr
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - uploads:/app/uploads
+    networks:
+      - no-skills-network
+    ports:
+      - "3001:3001"
+    depends_on:
+      - database
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: no-skills-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      REACT_APP_API_URL: https://no-skills.fr/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/dist
+    networks:
+      - no-skills-network
+    ports:
+      - "3000:3000"
+
+  # Redis pour les sessions et cache
+  redis:
+    image: redis:7-alpine
+    container_name: no-skills-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - no-skills-network
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:
+
+networks:
+  no-skills-network:
+    driver: bridge

@@ -227,7 +227,7 @@ install_docker_compose() {
 
     # Vérifier les deux versions possibles
     if command -v docker-compose &> /dev/null; then
-        log "Docker Compose (standalone) est déjà installé"
+        log "Docker Compose (standalone) est déjà install��"
         return
     fi
 
@@ -362,8 +362,8 @@ services:
   # Backend API (Node.js/Express)
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: no-skills-api
     restart: unless-stopped
     environment:
@@ -390,8 +390,8 @@ services:
   # Frontend React
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: no-skills-frontend
     restart: unless-stopped
     environment:

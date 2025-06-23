@@ -9,13 +9,13 @@ LABEL version="1.0.0"
 WORKDIR /app
 
 # Copier les fichiers de dépendances en premier (pour optimiser le cache Docker)
-COPY package*.json ./
+COPY backend/package*.json ./
 
 # Installer les dépendances
 RUN npm install --only=production && npm cache clean --force
 
-# Copier le code source
-COPY . .
+# Copier le code source du backend
+COPY backend/ ./
 
 # Créer le dossier uploads
 RUN mkdir -p uploads

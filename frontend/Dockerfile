@@ -11,14 +11,21 @@ RUN apk add --no-cache git
 # Créer le répertoire de travail
 WORKDIR /app
 
-# Copier les fichiers de configuration
+# Copier les fichiers de configuration depuis la racine
 COPY package*.json ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY tailwind.config.ts ./
+COPY postcss.config.js ./
+COPY index.html ./
+COPY components.json ./
 
 # Installer les dépendances
 RUN npm install --silent
 
-# Copier tous les fichiers nécessaires
-COPY . ./
+# Copier le code source
+COPY src/ src/
+COPY public/ public/
 
 # Variables d'environnement pour le build
 ENV NODE_ENV=production

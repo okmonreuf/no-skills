@@ -46,25 +46,6 @@ services:
     depends_on:
       - database
 
-  # Frontend React
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: no-skills-frontend
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      REACT_APP_API_URL: https://no-skills.fr/api
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/dist
-    networks:
-      - no-skills-network
-    ports:
-      - "3000:3000"
-
   # Redis pour les sessions et cache
   redis:
     image: redis:7-alpine

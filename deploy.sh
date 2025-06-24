@@ -227,7 +227,7 @@ install_docker_compose() {
 
     # Vérifier les deux versions possibles
     if command -v docker-compose &> /dev/null; then
-        log "Docker Compose (standalone) est déjà install��"
+        log "Docker Compose (standalone) est déjà installé"
         return
     fi
 
@@ -378,8 +378,8 @@ services:
       CORS_ORIGIN: https://${DOMAIN}
     volumes:
       - ./backend:/app
-      - /app/node_modules
-      - uploads:/app/uploads
+      - node_modules
+      - uploads:uploads
     networks:
       - no-skills-network
     ports:
@@ -399,8 +399,8 @@ services:
       REACT_APP_API_URL: https://${DOMAIN}/api
     volumes:
       - ./frontend:/app
-      - /app/node_modules
-      - /app/dist
+      - node_modules
+      - dist
     networks:
       - no-skills-network
     ports:
@@ -450,7 +450,10 @@ EMAIL=$EMAIL
 DB_PASSWORD=$DB_PASSWORD
 
 # JWT
-JWT_SECRET=$JWT_SECRET
+JWT_SECRET=m9cAkixkXU/nKfedP+Ip+RUbSKknafr3RAacqEFW0UK8Qe2pSVKqWR9PyvCZxpkh
+SECRET_KEY="eZRrjBrDsGIvR/K3j/KE7g=="
+
+
 
 # Redis
 REDIS_PASSWORD=$REDIS_PASSWORD
@@ -522,7 +525,7 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_Set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
     # Gestion des fichiers uploadés
@@ -685,7 +688,21 @@ deploy_code() {
     # Copier le frontend (code React)
     if [ -d "./src" ]; then
         log "Copie du code frontend..."
-        cp -r . $APP_DIR/frontend/
+
+        # Copier TOUS les fichiers source à la racine du contexte Docker
+        cp -r ./src "$APP_DIR/" 2>/dev/null || true
+        cp -r ./public "$APP_DIR/" 2>/dev/null || mkdir -p "$APP_DIR/public"
+        cp ./index.html "$APP_DIR/" 2>/dev/null || true
+        cp ./vite.config.ts "$APP_DIR/" 2>/dev/null || true
+        cp ./tailwind.config.ts "$APP_DIR/" 2>/dev/null || true
+        cp ./postcss.config.js "$APP_DIR/" 2>/dev/null || true
+        cp ./tsconfig*.json "$APP_DIR/" 2>/dev/null || true
+        cp ./components.json "$APP_DIR/" 2>/dev/null || true
+        cp ./package.json "$APP_DIR/" 2>/dev/null || true
+        cp ./package-lock.json "$APP_DIR/" 2>/dev/null || true
+
+        # Copier aussi dans le dossier frontend
+        cp -r frontend/* frontend/.[!.]* "$APP_DIR/frontend/" 2>/dev/null || true
 
         # Créer le Dockerfile pour le frontend
         cat > $APP_DIR/frontend/Dockerfile << 'EOF'
@@ -693,27 +710,32 @@ FROM node:18-alpine as builder
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package*.json ./
-RUN npm install --only=production
+# Copier package.json depuis le frontend
+COPY frontend/package.json ./
 
-# Copier le code source
-COPY . .
+# Installer les dépendances
+RUN npm install
+
+# Copier tous les fichiers source depuis la racine (copiés par deploy.sh)
+COPY index.html ./
+COPY vite.config.ts ./
+COPY tailwind.config.ts ./
+COPY postcss.config.js ./
+COPY tsconfig*.json ./
+COPY components.json ./
+COPY src/ ./src/
+COPY public/ ./public/
 
 # Build de production
 RUN npm run build
 
-# Image de production avec nginx
+# Production avec Nginx
 FROM nginx:alpine
 
-# Copier les fichiers buildés
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Configuration nginx pour React Router
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
 EXPOSE 3000
-
 CMD ["nginx", "-g", "daemon off;"]
 EOF
 
@@ -765,7 +787,7 @@ EOF
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
     "socket.io": "^4.7.2",
-    "multer": "^1.4.5",
+    "multer": "^1.4.4",
     "redis": "^4.6.7",
     "dotenv": "^16.3.1",
     "express-rate-limit": "^6.10.0",
@@ -832,20 +854,24 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package*.json ./
+# Copier les fichiers de dépendances depuis le backend
+COPY backend/package*.json ./
 
 # Installer les dépendances
 RUN npm install --only=production
 
-# Copier le code source
-COPY . .
+# Copier le code source du backend
+COPY backend/ ./
+
+# Créer le dossier uploads
+RUN mkdir -p uploads
 
 # Créer un utilisateur non-root
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nodejs -u 1001
 
 # Changer le propriétaire des fichiers
+RUN chown -R nodejs:nodejs /app
 USER nodejs
 
 EXPOSE 3001

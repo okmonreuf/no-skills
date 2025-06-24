@@ -387,24 +387,7 @@ services:
     depends_on:
       - database
 
-  # Frontend React
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: no-skills-frontend
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      REACT_APP_API_URL: https://${DOMAIN}/api
-    volumes:
-      - ./frontend:/app
-      - node_modules
-      - dist
-    networks:
-      - no-skills-network
-    ports:
-      - "3000:3000"
+
 
   # Redis pour les sessions et cache
   redis:
@@ -482,9 +465,9 @@ server {
     # Taille maximale des uploads
     client_max_body_size 50M;
 
-    # Frontend (React)
+    # Frontend (React) - Serveur de développement qui fonctionne déjà
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:5173;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -493,9 +476,6 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
-
-        # Gestion des fichiers statiques
-        try_files \$uri \$uri/ @fallback;
     }
 
     # API Backend
@@ -535,15 +515,7 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Fallback pour React Router
-    location @fallback {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
+
 }
 EOF
 
@@ -604,9 +576,9 @@ server {
     # Taille maximale des uploads
     client_max_body_size 50M;
 
-    # Frontend (React)
+    # Frontend (React) - Serveur de développement qui fonctionne déjà
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:5173;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -615,9 +587,6 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
-
-        # Gestion des fichiers statiques
-        try_files \$uri \$uri/ @fallback;
     }
 
     # API Backend
@@ -657,15 +626,7 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Fallback pour React Router
-    location @fallback {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
+
 }
 EOF
 
@@ -1045,7 +1006,7 @@ start_services() {
         exit 1
     fi
 
-    log "✅ Services démarrés avec succès"
+    log "✅ Services démarr��s avec succès"
 }
 
 # Configuration des logs et monitoring
